@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "776961382756",
+    "project_id": "astrology-d317e",
+    "storage_bucket": "astrology-d317e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776961382756:android:74f9698db63760e1958271",
+        "android_client_info": {
+          "package_name": "com.astrologyapp.appversion14sa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHprGUvVMn_KPWsTuI_YRULihOiUecS5w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

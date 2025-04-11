@@ -1,0 +1,88 @@
+/// إنشاء بث مباشر جديد
+static Future<String> createLiveStream({
+  required String astrologistId,
+  required String title,
+  required String description,
+  DateTime? startTime,
+}) async {
+  try {
+    print('محاولة إنشاء بث مباشر جديد');
+    print('معرف المنجم: $astrologistId');
+    print('العنوان: $title');
+    
+    if (astrologistId.isEmpty || title.isEmpty) {
+      throw Exception('معرف المنجم والعنوان مطلوبان لإنشاء بث مباشر');
+    }
+
+    // التحقق من أن المستخدم منجم
+    final userDoc = await _firestore.collection('users').doc(astrologistId).get();
+    if (!userDoc.exists) {
+      throw Exception('المستخدم غير موجود');
+    }
+
+    final userData = userDoc.data();
+    if (userData == null || userData['user_type'] != 'astrologer') {
+      throw Exception('فقط المنجمون يمكنهم إنشاء بث مباشر');
+    }
+
+    // التحقق مما إذا كان المنجم لديه بث مباشر نشط بالفعل
+    final existingStreams = await _firestore
+        .collection('live_streams')
+        .where('broadcasterId', isEqualTo: astrologistId)
+        .where('status', isEqualTo: 'live')
+        .get();
+
+    if (existingStreams.docs.isNotEmpty) {
+      // إذا كان لديه بث مباشر بالفعل، نعيد معرف البث الحالي
+      print('المنجم لديه بث مباشر نشط بالفعل، إعادة معرف البث الحالي');
+      String existingStreamId = existingStreams.docs.first.id;
+      return existingStreamId;
+    }
+
+    final String broadcasterName = userData['first_name'] ?? 'منجم';
+
+    // إنشاء بث مباشر جديد
+    final String channelName = generateSessionId();
+    
+    // إنشاء بيانات البث المباشر
+    final Map<String, dynamic> liveStreamData = {
+      'channelName': channelName,
+      'broadcasterId': astrologistId,
+      'broadcaster_id': astrologistId, // للتوافق مع الكود القديم
+      'broadcasterName': broadcasterName,
+      'title': title,
+      'description': description,
+      'startTime': startTime ?? FieldValue.serverTimestamp(),
+      'status': 'live', // live, ended
+      'viewerCount': 0,
+      'viewers': 0, // للتوافق مع الكود القديم
+      'createdAt': FieldValue.serverTimestamp(),
+      'lastUpdated': FieldValue.serverTimestamp(),
+    };
+
+    // إضافة البث المباشر إلى Firestore
+    final docRef = await _firestore.collection('live_streams').add(liveStreamData);
+    
+    final String liveStreamId = docRef.id;
+    print('تم إنشاء بث مباشر جديد بنجاح. المعرف: $liveStreamId');
+
+    // إرسال إشعار للمستخدمين عن البث المباشر الجديد عبر Socket.IO
+    try {
+      await NotificationService.sendNewLiveStreamNotification(
+        astrologistId: astrologistId,
+        liveStreamId: liveStreamId,
+        title: title,
+      );
+      print('تم إرسال إشعار البث المباشر بنجاح');
+    } catch (e) {
+      print('خطأ في إرسال إشعار البث المباشر: $e');
+      // نستمر بالرغم من خطأ الإشعار
+    }
+
+    // إرجاع معرف البث المباشر (وثيقة Firestore)
+    return liveStreamId;
+  } catch (e) {
+    print('خطأ في إنشاء البث المباشر: $e');
+    rethrow;
+  }
+} 

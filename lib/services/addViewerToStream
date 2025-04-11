@@ -1,0 +1,69 @@
+/// إضافة مشاهد إلى البث المباشر
+static Future<void> addViewerToStream(String streamId, String userId) async {
+  try {
+    print('محاولة إضافة مشاهد إلى البث المباشر: $streamId');
+    print('معرف المستخدم: $userId');
+
+    // التحقق من وجود البث المباشر
+    final streamDoc = await _firestore.collection('live_streams').doc(streamId).get();
+
+    if (!streamDoc.exists) {
+      print('البث المباشر غير موجود: $streamId');
+      throw Exception('البث المباشر غير موجود');
+    }
+
+    final streamData = streamDoc.data();
+    if (streamData == null) {
+      print('بيانات البث المباشر غير موجودة');
+      throw Exception('بيانات البث المباشر غير موجودة');
+    }
+
+    // التحقق من حالة البث المباشر
+    if (streamData['status'] != 'live') {
+      print('البث المباشر غير نشط: ${streamData['status']}');
+      throw Exception('البث المباشر غير نشط حالياً');
+    }
+
+    // التحقق من وجود المشاهد بالفعل
+    final viewerDoc = await _firestore
+        .collection('live_streams')
+        .doc(streamId)
+        .collection('live_viewers')
+        .doc(userId)
+        .get();
+
+    if (viewerDoc.exists) {
+      print('المشاهد موجود بالفعل في البث المباشر');
+      return;
+    }
+
+    final batch = _firestore.batch();
+
+    // إضافة المشاهد إلى مجموعة المشاهدين
+    DocumentReference viewerRef = _firestore
+        .collection('live_streams')
+        .doc(streamId)
+        .collection('live_viewers')
+        .doc(userId);
+
+    batch.set(viewerRef, {
+      'user_id': userId,
+      'joined_at': FieldValue.serverTimestamp(),
+      'last_updated': FieldValue.serverTimestamp(),
+    });
+
+    // تحديث عدد المشاهدين الإجمالي
+    DocumentReference streamRef = _firestore.collection('live_streams').doc(streamId);
+    batch.update(streamRef, {
+      'viewerCount': FieldValue.increment(1),
+      'viewers': FieldValue.increment(1), // للتوافق مع الكود القديم
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+    print('تمت إضافة المشاهد إلى البث المباشر بنجاح');
+  } catch (e) {
+    print('خطأ في إضافة مشاهد إلى البث المباشر: $e');
+    rethrow;
+  }
+} 

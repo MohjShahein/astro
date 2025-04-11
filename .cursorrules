@@ -1,0 +1,69 @@
+{
+  "rules": {
+    "formatOnSave": true,
+    "lintOnSave": true,
+    "organizeImportsOnSave": true,
+    "exclude": [
+      "**/build/**",
+      "**/.dart_tool/**",
+      "**/ios/**",
+      "**/android/**",
+      "**/web/**",
+      "**/windows/**",
+      "**/linux/**",
+      "**/macos/**",
+      "**/test/**",
+      "**/*.g.dart",
+      "**/*.freezed.dart",
+      "**/*.mocks.dart",
+      "**/firebase-debug.log"
+    ],
+    "search": {
+      "exclude": [
+        "**/build/**",
+        "**/.dart_tool/**",
+        "**/ios/**",
+        "**/android/**",
+        "**/web/**",
+        "**/windows/**",
+        "**/linux/**",
+        "**/macos/**",
+        "**/test/**",
+        "**/*.g.dart",
+        "**/*.freezed.dart",
+        "**/*.mocks.dart",
+        "**/firebase-debug.log"
+      ]
+    },
+    "editor": {
+      "tabSize": 2,
+      "insertSpaces": true,
+      "rulers": [80],
+      "wordWrap": "off",
+      "bracketPairColorization": true,
+      "guides": {
+        "bracketPairs": true,
+        "indentation": true
+      },
+      "formatOnPaste": true,
+      "formatOnType": true
+    },
+    "files": {
+      "associations": {
+        "*.dart": "dart",
+        "*.yaml": "yaml",
+        "*.json": "json",
+        "*.rules": "javascript"
+      },
+      "trimTrailingWhitespace": true,
+      "insertFinalNewline": true,
+      "trimFinalNewlines": true
+    },
+    "dart": {
+      "lineLength": 80,
+      "enableSdkFormatter": true,
+      "completeFunctionCalls": true,
+      "showTodos": true
+    }
+  }
+} 

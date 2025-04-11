@@ -1,0 +1,240 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // دوال مساعدة بسيطة
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isUserDoc(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isAstrologer() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'astrologer';
+    }
+    
+    function isApprovedAstrologer() {
+      return isAstrologer() || (
+        isSignedIn() && (
+          exists(/databases/$(database)/documents/approved_astrologers/$(request.auth.uid)) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.astrologer_status == 'approved')
+        )
+      );
+    }
+
+    function isOwnerOfStream(streamId) {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/live_streams/$(streamId)) &&
+        get(/databases/$(database)/documents/live_streams/$(streamId)).data.broadcasterId == request.auth.uid;
+    }
+
+    // دالة التحقق من مشاركة المستخدم في الجلسة
+    function isSessionParticipant(sessionData) {
+      return sessionData.participants.hasAny([request.auth.uid]);
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isUserDoc(userId);
+      allow update: if isUserDoc(userId);
+      allow delete: if isAdmin();
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid || 
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid || 
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Approved astrologers collection
+    match /approved_astrologers/{astrologerId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || (isUserDoc(astrologerId) && isApprovedAstrologer());
+    }
+
+    // Astrologer rates collection
+    match /astrologer_rates/{astrologerId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || (isUserDoc(astrologerId) && isApprovedAstrologer());
+    }
+
+    // Chat sessions collection
+    match /chat_sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.user_id || 
+        request.auth.uid == resource.data.astrologer_id || 
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Zodiac readings collection
+    match /zodiac_readings/{zodiacSign} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Default rates collection
+    match /default_rates/{document=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Messages collection
+    match /chat_sessions/{sessionId}/messages/{messageId} {
+      allow read: if isSignedIn() && (
+        isSessionParticipant(get(/databases/$(database)/documents/chat_sessions/$(sessionId)).data)
+      );
+      allow create: if isSignedIn() && (
+        isSessionParticipant(get(/databases/$(database)/documents/chat_sessions/$(sessionId)).data)
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Wallets collection
+    match /wallets/{userId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Transactions collection
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        resource.data.astrologer_id == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Transaction errors collection
+    match /transaction_errors/{document=**} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Status history collection
+    match /status_history/{documentId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // Reviews collection
+    match /reviews/{reviewId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Session locks collection
+    match /session_locks/{userId} {
+      allow read, write: if isSignedIn() && (isUserDoc(userId) || isAdmin());
+    }
+
+    // Live streams collection
+    match /live_streams/{streamId} {
+      allow read: if isSignedIn();
+      allow create: if isAstrologer() || isAdmin();
+      allow update: if isOwnerOfStream(streamId) || isAdmin() || 
+        (isSignedIn() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewers', 'viewerCount', 'lastUpdated']));
+      allow delete: if isOwnerOfStream(streamId) || isAdmin();
+
+      // Live viewers subcollection
+      match /live_viewers/{viewerId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn() && (
+          request.auth.uid == viewerId || 
+          request.auth.uid == get(/databases/$(database)/documents/live_streams/$(streamId)).data.broadcasterId ||
+          isAdmin()
+        );
+        allow delete: if isSignedIn() && (
+          request.auth.uid == viewerId || 
+          request.auth.uid == get(/databases/$(database)/documents/live_streams/$(streamId)).data.broadcasterId ||
+          isAdmin()
+        );
+      }
+    }
+
+    // Chats collection
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        resource.data.astrologer_id == request.auth.uid
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        resource.data.astrologer_id == request.auth.uid
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        resource.data.astrologer_id == request.auth.uid
+      );
+    }
+
+    // Messages collection
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if isSignedIn() && exists(/databases/$(database)/documents/chats/$(chatId));
+      allow create: if isSignedIn() && exists(/databases/$(database)/documents/chats/$(chatId));
+      allow update: if isSignedIn() && resource.data.sender_id == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.sender_id == request.auth.uid;
+    }
+
+    // Astrologers collection
+    match /astrologers/{astrologerId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == astrologerId;
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == astrologerId);
+      allow delete: if isAdmin();
+    }
+
+    // Admins collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Live stream owner function
+    function isLiveStreamOwner(streamId) {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/live_streams/$(streamId)).data.broadcasterId == request.auth.uid;
+    }
+
+    // Viewer function - تم تبسيطها للسماح لأي مستخدم مسجل
+    function isViewer() {
+      return isSignedIn();
+    }
+  }
+}
